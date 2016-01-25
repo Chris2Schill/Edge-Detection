@@ -9,7 +9,6 @@ typedef struct Record{
     char a[2];
     int width, height, graylevel;
 }Record;
-Record record;
 
 typedef struct Mask{
     double X[MAXMASK][MAXMASK];
@@ -30,7 +29,6 @@ void scaleImageWithRespectTo(double maxVal, double[PICSIZE][PICSIZE]);
 void writeImageToFile(double[PICSIZE][PICSIZE], FILE*);
 double findMaxValue(double[PICSIZE][PICSIZE]);
 
-
 int main(int argc, char** argv){
     // Command-Line Arguements
     FILE* inputImage=fopen(argv[1],"rb");
@@ -38,6 +36,7 @@ int main(int argc, char** argv){
     double sigma = atof(argv[3]);
     double threshold = atof(argv[4]);
     
+    Record record;
     fread(&record, sizeof(record), 1, inputImage);
     fwrite(&record, sizeof(record), 1, outputImage);
 
@@ -148,3 +147,4 @@ double findMaxValue(double array[PICSIZE][PICSIZE]){
     }
     return max;
 }
+
