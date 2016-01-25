@@ -13,6 +13,7 @@ typedef struct Record{
 typedef struct Mask{
     double X[MAXMASK][MAXMASK];
     double Y[MAXMASK][MAXMASK];
+    int radius;
 }Mask;
 
 typedef struct GradientVector{
@@ -21,12 +22,13 @@ typedef struct GradientVector{
 }GradientVector;
 
 void canny(FILE*, FILE*, double, double);
-void readImageToBuffer(int[PICSIZE][PICSIZE], FILE*);
-Mask generateSmoothenerMask(int, double);
-GradientVector calculateGradients(int[PICSIZE][PICSIZE], Mask, int);
+void readImageTo(int[PICSIZE][PICSIZE], FILE*);
+Mask generateSmoothenerMask(double);
+GradientVector calculateGradients(int[PICSIZE][PICSIZE], Mask);
 double calculateMagnitudes(GradientVector, double, int, double[PICSIZE][PICSIZE]);
 void scaleImageWithRespectTo(double maxVal, double[PICSIZE][PICSIZE]);
-void writeImageToFile(double[PICSIZE][PICSIZE], FILE*);
+void applyPeakFilterTo(double[PICSIZE][PICSIZE], GradientVector, int);
+void writeTo(FILE*, double[PICSIZE][PICSIZE]);
 double findMaxValue(double[PICSIZE][PICSIZE]);
 
 int main(int argc, char** argv){
@@ -43,32 +45,35 @@ int main(int argc, char** argv){
     canny(inputImage, outputImage, sigma, threshold);
 }
 
-void canny(FILE* inputImage, FILE* outputImage, double sigma, double threshold){
+void canny(FILE* inputImageFile, FILE* outputImageFile, double sigma, double threshold){
     Mask mask;
-    int maskRadius = (int)(sigma * 3);
-    int pic[PICSIZE][PICSIZE];
-    double magnitudes[PICSIZE][PICSIZE];
+    mask.radius = (int)(sigma * 3);
+    int picBuffer[PICSIZE][PICSIZE];
+    double itsMagnitudes[PICSIZE][PICSIZE];
     double maxMagnitude;
-    GradientVector gradients;
+    GradientVector usingGradients;
 
-    readImageToBuffer(pic, inputImage);
-    mask = generateSmoothenerMask(maskRadius, sigma);
-    gradients = calculateGradients(pic, mask, maskRadius);
-    calculateMagnitudes(gradients, threshold, maskRadius, magnitudes);
-    maxMagnitude = findMaxValue(magnitudes);
-    scaleImageWithRespectTo(maxMagnitude, magnitudes);
-    writeImageToFile(magnitudes, outputImage);
+    readImageTo(picBuffer, inputImageFile);
+    mask = generateSmoothenerMask(sigma);
+    usingGradients = calculateGradients(picBuffer, mask);
+    calculateMagnitudes(usingGradients, threshold, mask.radius, itsMagnitudes);
+    maxMagnitude = findMaxValue(itsMagnitudes);
+    scaleImageWithRespectTo(maxMagnitude, itsMagnitudes);
+    applyPeakFilterTo(itsMagnitudes, usingGradients, mask.radius);
+
+    writeTo(outputImageFile, itsMagnitudes);
 }
 
-void readImageToBuffer(int pic[PICSIZE][PICSIZE], FILE* fileStream){
+void readImageTo(int buffer[PICSIZE][PICSIZE], FILE* fileStream){
     for (int i = 0; i < 256; i++){
         for (int j = 0; j < 256; j++){
-            pic[i][j] = getc (fileStream);
+            buffer[i][j] = getc (fileStream);
         }
     }   
 }
 
-Mask generateSmoothenerMask(int maskRadius, double sigma){
+Mask generateSmoothenerMask(double sigma){
+    int maskRadius = (int)(sigma*3);
     int centerX = MAXMASK/2;
     int centerY = MAXMASK/2;
     Mask mask;
@@ -81,16 +86,16 @@ Mask generateSmoothenerMask(int maskRadius, double sigma){
     return mask;
 }
 
-GradientVector calculateGradients(int pic[PICSIZE][PICSIZE], Mask mask, int maskRadius){
+GradientVector calculateGradients(int pic[PICSIZE][PICSIZE], Mask mask){
     GradientVector gradients;
     int centerX = MAXMASK/2;
     int centerY = MAXMASK/2;
-    for (int i = maskRadius; i <= 255-maskRadius; i++){
-        for (int j = maskRadius; j<= 255-maskRadius; j++){
+    for (int i = mask.radius; i <= 255-mask.radius; i++){
+        for (int j = mask.radius; j<= 255-mask.radius; j++){
             int sumX = 0;
             int sumY = 0;
-            for (int p = -maskRadius; p <= maskRadius; p++){
-                for (int q = -maskRadius; q <= maskRadius; q++){
+            for (int p = -mask.radius; p <= mask.radius; p++){
+                for (int q = -mask.radius; q <= mask.radius; q++){
                     sumX += pic[i+p][j+q] * mask.X[p+centerY][q+centerX];
                     sumY += pic[i+p][j+q] * mask.Y[p+centerY][q+centerX];
                 }
@@ -128,7 +133,50 @@ void scaleImageWithRespectTo(double maxVal, double magnitudes[PICSIZE][PICSIZE])
     }
 }
 
-void writeImageToFile(double image[PICSIZE][PICSIZE], FILE* outputFile){
+void applyPeakFilterTo(double magnitudes[PICSIZE][PICSIZE], GradientVector gradients,
+                        int maskRadius){
+    for(int i = maskRadius; i < 256-maskRadius; i++){ 
+        for(int j = maskRadius; j < 256-maskRadius; j++){
+            if (gradients.X[i][j] == 0.0) { 
+                gradients.X[i][j] = 0.00001;
+            }
+            double slope = gradients.Y[i][j]/gradients.X[i][j];
+            if (slope <= 0.4142 && slope > -0.4142){
+                if (magnitudes[i][j] > magnitudes[i][j-1] && magnitudes[i][j] > magnitudes[i][j+1]){ 
+                    magnitudes[i][j] = 255;
+                } 
+                else{
+                    magnitudes[i][j] = 0;
+                }
+            }
+            else if (slope <= 2.4142 && slope > 0.4142){
+                if (magnitudes[i][j] > magnitudes[i-1][j-1] && magnitudes[i][j] > magnitudes[i+1][j+1]){
+                    magnitudes[i][j] = 255; 
+                }
+                else{
+                    magnitudes[i][j] = 0;
+                }
+            }
+            else if (slope <= -0.4142 && slope > -2.4142){
+                if (magnitudes[i][j] > magnitudes[i+1][j-1] && magnitudes[i][j] > magnitudes[i-1][j+1]){
+                    magnitudes[i][j] = 255;
+                } 
+                else{
+                    magnitudes[i][j] = 0;
+                }
+            }else{
+                if (magnitudes[i][j] > magnitudes[i-1][j] && magnitudes[i][j] > magnitudes[i+1][j]){
+                    magnitudes[i][j] = 255;
+                } 
+                else{
+                    magnitudes[i][j] = 0;
+                }
+            }
+        }
+    }
+}
+
+void writeTo(FILE* outputFile, double image[PICSIZE][PICSIZE]){
     for (int i = 0; i < PICSIZE; i++){
         for (int j = 0; j < PICSIZE; j++){
             fprintf(outputFile,"%c",(char)((int)(image[i][j])));
