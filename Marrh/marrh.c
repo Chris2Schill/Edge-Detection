@@ -8,7 +8,6 @@ typedef struct Record{
     char a[2];
     int width, height, graylevel;
 }Record;
-Record record;
 
 void marrh(FILE*, FILE*, double);
 void readImageToPicBuffer(FILE*);
@@ -27,7 +26,6 @@ int    edgeflag[PICSIZE][PICSIZE];
 double mask[MAXMASK][MAXMASK];
 double conv[PICSIZE][PICSIZE];
 
-
 int main(int argc, char** argv){
 
     int     i,j,p,q,s,t;
@@ -44,6 +42,7 @@ int main(int argc, char** argv){
     int centx = MAXMASK/2;
     int centy = MAXMASK/2;
 
+    Record record;
     fread(&record, sizeof(record), 1, inputFile);
     fwrite(&record, sizeof(record), 1, outputFile1);
     fwrite(&record, sizeof(record), 1, outputFile2);
