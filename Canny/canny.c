@@ -26,7 +26,7 @@ typedef struct Threshold{
     double low;
 }Threshold;
 
-void canny(FILE*, FILE*, double);
+void canny(FILE*, FILE*, FILE*, FILE*, double);
 void readImageTo(int[PICSIZE][PICSIZE], FILE*);
 Mask generateSmoothenerMask(double);
 GradientVector calculateGradients(int[PICSIZE][PICSIZE], Mask);
@@ -41,17 +41,21 @@ double findMaxValue(double[PICSIZE][PICSIZE]);
 
 int main(int argc, char** argv){
     FILE* inputImage=fopen(argv[1],"rb");
-    FILE* outputImage=fopen(argv[2],"wb");
-    double sigma = atof(argv[3]);
+    FILE* outputMagnitudes=fopen(argv[2],"wb");
+    FILE* outputPeaks=fopen(argv[3],"wb");
+    FILE* outputFinal=fopen(argv[4],"wb");
+    double sigma = atof(argv[5]);
     
     Record record;
     fread(&record, sizeof(record), 1, inputImage);
-    fwrite(&record, sizeof(record), 1, outputImage);
+    fwrite(&record, sizeof(record), 1, outputMagnitudes);
+    fwrite(&record, sizeof(record), 1, outputPeaks);
+    fwrite(&record, sizeof(record), 1, outputFinal);
 
-    canny(inputImage, outputImage, sigma);
+    canny(inputImage, outputMagnitudes, outputPeaks, outputFinal, sigma);
 }
 
-void canny(FILE* inputImageFile, FILE* outputImageFile, double sigma){
+void canny(FILE* inputImageFile, FILE* outputMagnitudes, FILE* outputPeaks, FILE* outputFinal, double sigma){
     Mask mask;
     int picBuffer[PICSIZE][PICSIZE];
     double itsMagnitudes[PICSIZE][PICSIZE];
@@ -71,7 +75,9 @@ void canny(FILE* inputImageFile, FILE* outputImageFile, double sigma){
     Threshold threshold = getThreshold(itsMagnitudes);
     applyHysteresisThresholdTo(itsMagnitudes, usingGradients, mask.radius, 
                                 peaks, threshold, final);
-    writeTo(outputImageFile, final);
+    writeTo(outputMagnitudes, itsMagnitudes);
+    writeTo(outputPeaks, peaks);
+    writeTo(outputFinal, final);
 }
 
 void readImageTo(int buffer[PICSIZE][PICSIZE], FILE* fileStream){
